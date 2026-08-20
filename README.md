@@ -54,12 +54,50 @@ happens) directly into full root.
 
 This same general category of problem — a static or algorithmically-derivable path to a
 root-equivalent account on Unified CM — resurfaced as recently as 2025's
-[CVE-2025-20309](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-cucm-rce-pqVYwyb.html),
+[CVE-2025-20309](https://www.cisco.com/c/en/us/support/docs/csa/cisco-sa-cucm-ssh-m4UBdpE7.html),
 a maximum-severity advisory covering static root credentials left in certain Engineering
 Special builds. The lesson is the same one the community had been writing about with the
 5.x/6.x/7.x remote-support mechanism for over a decade: **a support-access backdoor is only
 as strong as the secrecy of the mechanism that gates it**, and mechanisms don't stay secret
 forever.
+
+### Modeling the derivation class (illustrative, not the real transform)
+
+At a purely structural level, any "passphrase → password" support-access scheme boils down
+to a keyed transform:
+
+```
+password_candidate = Truncate( Encode( HMAC(K_static, passphrase) ), N )
+```
+
+where `K_static` is a fixed value baked into whatever tool performs the derivation. The
+concrete choice of primitive (HMAC-SHA1, a block cipher, a bespoke bit-mixing routine —
+the real CUCM tooling is not any of the specific things described here) barely matters to
+the security argument. What matters is that `K_static` has to be physically present, in
+recoverable form, inside a piece of software that ships to a party who is not supposed to
+be able to compute passwords unassisted. That is a contradiction in terms: a key an
+adversary can disassemble is not a secret, it's an inconvenience.
+
+To make the mechanics concrete, here's a fully worked toy example with fabricated inputs
+(none of these values are real CUCM constants):
+
+```
+K_static  = "S4mpleStaticKey!!"      (hypothetical, embedded in a hypothetical tool)
+passphrase = "QW7X-PL2K"             (hypothetical, displayed by the CLI)
+
+HMAC-SHA256(K_static, passphrase)
+  = 38bfcdf3f7861ae08a51c18decf25b68d8e47b03c819b4db62107b71c961387b
+
+password_candidate = first 10 chars of Base64(digest bytes), uppercased
+  = "OL/N3/HXQZ"   (illustrative only)
+```
+
+Anyone holding `K_static` computes this in microseconds, offline, with no interaction with
+Cisco and no rate limiting — because the entire "protocol" is a pure function of two known
+inputs. The real-world version of this class of bug has a well-documented history: it's the
+same reasoning behind why hardcoded API keys in mobile apps, hardcoded firmware update
+signing keys, and hardcoded support-tool secrets all eventually leak — the key must be
+distributed to be usable, and distribution and secrecy are in direct tension.
 
 ## 2. FlexLM licensing architecture
 
@@ -86,6 +124,55 @@ essentially this approach go back to at least 2010 (see references), and Cisco's
 progressive hardening of the scheme across releases (weaker verification in the 5.x-8.x
 era, ECC in later 9.x builds, RSA-2048 by 11.x) tracks the timeline of public "jailbreak"
 tutorials fairly closely.
+
+### The verification math, and why patching wins regardless of key size
+
+License signature schemes are built on textbook digital-signature math. At a high level,
+the vendor computes a hash `H` over the license's fields (feature name, count, expiry,
+host ID, and so on), signs it with a private key, and embeds the signature in the license
+file. The verifier — the code running on the customer's box — recomputes `H` over the same
+fields and checks it against the signature using the corresponding public key. For RSA,
+that check is literally: does `signature^e mod n` equal the expected hash?
+
+Here's a complete toy RSA example with small, made-up numbers (nowhere close to real
+key sizes — real FlexLM/Cisco keys are 2048-bit RSA or equivalent ECC — but the arithmetic
+is exactly the same shape):
+
+```
+p = 17, q = 11                  →  n = p*q = 187
+phi(n) = (p-1)(q-1) = 160
+e = 7                            →  public exponent
+d = 23                           →  private exponent (e*d ≡ 1 mod phi(n))
+
+"license hash" m = 88            (stand-in for H(license fields); not a real hash)
+
+Sign:    s = m^d mod n = 88^23 mod 187 = 11
+Verify:  m' = s^e mod n = 11^7 mod 187 = 88   → m' == m, signature accepted
+```
+
+That's genuinely how RSA signature verification works, just at a scale small enough to
+compute by hand. Scaling `n` up from 187 to a 617-digit (2048-bit) number, or switching to
+elliptic-curve signatures, changes the *cost of forging a signature from scratch* by
+many orders of magnitude — but it changes nothing about what happens after `Verify()`
+returns. The verifier is still just a function call whose boolean result some other code
+has to act on:
+
+```
+if Verify(pubkey, license_fields, signature):
+    grant_entitlement()
+else:
+    deny_entitlement()
+```
+
+If an attacker has root on the box running that code, they don't need to break RSA-2048 at
+all. They can patch the compiled class so `Verify()` always returns true, or replace the
+embedded public key with one whose matching private key they hold and sign whatever they
+want with it. Either way, the cryptographic strength of the *signature scheme* is entirely
+beside the point — the vulnerability is that the trust boundary (the code deciding whether
+to honor the signature) and the threat actor (an admin/attacker with root) are the same
+machine. This is a generic lesson in software protection/DRM design, not specific to FlexLM:
+client-side enforcement can only ever be as strong as the tamper-resistance of the client,
+independent of key size.
 
 ## Lessons
 
