@@ -116,8 +116,7 @@ weak, not a how-to.
 - [Jail-breaking Cisco Unified Communication Manager — The Recurity Lablog](https://blog.recurity-labs.com/articles/jail-breaking_cisco_unified_communication_manager/index.html)
 - [Cisco Licenses for VoIP and IPT: Unlock Cisco Unified Communications Manager Licenses (2010)](http://ciscolicenses.blogspot.com/2010/04/unlock-cisco-unified-communications.html)
 - [CUCM 7.x Jailbreak License Tutorial: Adding Free Licenses](https://www.studocu.com/en-us/document/lurleen-b-wallace-community-college/network-communications/cucm-jailbreak-license/95889018)
-- [ca-sa.co — CUCM 8.6 keygen](http://ca-sa.co/forum/2015/01/11/cucm-8-6-keygen/)
-- [Cisco Security Advisory: cisco-sa-cucm-rce-pqVYwyb (CVE-2025-20309)](https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-cucm-rce-pqVYwyb.html)
+- [Cisco Security Advisory: Cisco Unified Communications Manager Static SSH Credentials Vulnerability (CVE-2025-20309)](https://www.cisco.com/c/en/us/support/docs/csa/cisco-sa-cucm-ssh-m4UBdpE7.html)
 - [BleepingComputer: Cisco removes Unified CM CallManager backdoor root account](https://www.bleepingcomputer.com/news/security/cisco-removes-unified-cm-callManager-backdoor-root-account/)
 
 ## License
